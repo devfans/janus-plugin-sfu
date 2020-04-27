@@ -436,7 +436,8 @@ fn process_join(from: &Arc<Session>, room_id: RoomId, user_id: UserId, subscribe
     }
 
     let mut switchboard = SWITCHBOARD.write()?;
-    let body = json!({ "users": { room_id.as_str(): switchboard.get_users(&room_id) }});
+    let (main_room, all_rooms) = parse_all_rooms(&room_id);
+    let body = json!({ "users": { main_room.as_str(): switchboard.get_users(&main_room) }});
 
     // hack -- use data channel subscription to infer this, it would probably be nicer if
     // connections announced explicitly whether they were a publisher or subscriber
@@ -444,22 +445,26 @@ fn process_join(from: &Arc<Session>, room_id: RoomId, user_id: UserId, subscribe
     let join_kind = if gets_data_channel { JoinKind::Publisher } else { JoinKind::Subscriber };
 
     if join_kind == JoinKind::Publisher {
-        if switchboard.publishers_occupying(&room_id).len() > config.max_room_size {
-            return Err(From::from("Room is full."));
+        for room in all_rooms { 
+            if switchboard.publishers_occupying(&room).len() > config.max_room_size {
+                return Err(From::from("Room is full."));
+            }
         }
         if switchboard.sessions().len() > config.max_ccu {
             return Err(From::from("Server is full."));
         }
     }
 
-    if let Err(_existing) = from.join_state.set(JoinState::new(join_kind, room_id.clone(), user_id.clone())) {
+    if let Err(_existing) = from.join_state.set(JoinState::new(join_kind, all_rooms.clone(), user_id.clone())) {
         return Err(From::from("Handles may only join once!"));
     }
 
     if join_kind == JoinKind::Publisher {
-        let notification = json!({ "event": "join", "user_id": user_id, "room_id": room_id });
-        switchboard.join_publisher(Arc::clone(from), user_id.clone(), room_id.clone());
-        notify_except(&notification, &user_id, switchboard.publishers_occupying(&room_id));
+        for room in all_rooms { 
+            let notification = json!({ "event": "join", "user_id": user_id, "room_id": room });
+            switchboard.join_publisher(Arc::clone(from), user_id.clone(), room.clone());
+            notify_except(&notification, &user_id, switchboard.publishers_occupying(&room));
+        }
     } else {
         switchboard.join_subscriber(Arc::clone(from), user_id.clone(), room_id.clone());
     }

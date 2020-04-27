@@ -8,6 +8,10 @@ use std::error::Error;
 /// A room ID representing a Janus multicast room.
 pub type RoomId = String;
 
+pub fn parse_all_rooms(room_id: RoomId) -> (RoomId, Vec<RoomId>) {
+  (room_id, vec!())
+}
+
 /// A user ID representing a single Janus client. Used to correlate multiple Janus connections back to the same
 /// conceptual user for managing subscriptions.
 pub type UserId = String;

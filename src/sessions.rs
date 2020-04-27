@@ -20,7 +20,7 @@ pub struct JoinState {
     pub kind: JoinKind,
 
     /// The room ID that this session is in.
-    pub room_id: RoomId,
+    pub room_ids: Vec<RoomId>,
 
     /// An opaque ID uniquely identifying this user.
     pub user_id: UserId,
