@@ -166,8 +166,8 @@ impl Switchboard {
         self.publisher_to_subscribers.remove_key(session);
         if let Some(joined) = session.join_state.get() {
             self.publishers_by_user.remove(&joined.user_id);
-            for room in joined.room_ids {
-                if let Some(sessions) = self.publishers_by_room.get_vec_mut(&room) {
+            for room in &joined.room_ids {
+                if let Some(sessions) = self.publishers_by_room.get_vec_mut(room) {
                     sessions.retain(|x| x.handle != session.handle);
                 }
             }

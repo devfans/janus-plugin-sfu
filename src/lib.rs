@@ -16,7 +16,7 @@ use janus_plugin::{
     PluginRtpPacket, PluginRtcpPacket, PluginDataPacket, RawJanssonValue, RawPluginResult,
 };
 use lazy_static::lazy_static;
-use messages::{JsepKind, MessageKind, OptionalField, Subscription};
+use messages::{JsepKind, MessageKind, OptionalField, Subscription, parse_all_rooms};
 use messages::{RoomId, UserId};
 use once_cell::sync::{Lazy, OnceCell};
 use serde::de::DeserializeOwned;
@@ -318,7 +318,7 @@ extern "C" fn destroy_session(handle: *mut PluginSession, error: *mut c_int) {
                 // if this user is entirely disconnected, notify their roommates.
                 // todo: is it better if this is instead when their publisher disconnects?
                 if !switchboard.is_connected(&joined.user_id) {
-                    for room in joined.room_ids {
+                    for room in &joined.room_ids {
                         let response = json!({ "event": "leave", "user_id": &joined.user_id, "room_id": &room });
                         let occupants = switchboard.publishers_occupying(&room);
                         notify_except(&response, &joined.user_id, occupants);
@@ -438,7 +438,7 @@ fn process_join(from: &Arc<Session>, room_id: RoomId, user_id: UserId, subscribe
     }
 
     let mut switchboard = SWITCHBOARD.write()?;
-    let (main_room, all_rooms) = parse_all_rooms(&room_id);
+    let (main_room, all_rooms) = parse_all_rooms(room_id.clone());
     let body = json!({ "users": { main_room.as_str(): switchboard.get_users(&main_room) }});
 
     // hack -- use data channel subscription to infer this, it would probably be nicer if
@@ -447,7 +447,7 @@ fn process_join(from: &Arc<Session>, room_id: RoomId, user_id: UserId, subscribe
     let join_kind = if gets_data_channel { JoinKind::Publisher } else { JoinKind::Subscriber };
 
     if join_kind == JoinKind::Publisher {
-        for room in all_rooms { 
+        for room in &all_rooms { 
             if switchboard.publishers_occupying(&room).len() > config.max_room_size {
                 return Err(From::from("Room is full."));
             }
@@ -531,7 +531,7 @@ fn process_block(from: &Arc<Session>, whom: UserId) -> MessageResult {
     if let Some(joined) = from.join_state.get() {
         let mut switchboard = SWITCHBOARD.write()?;
         let event = json!({ "event": "blocked", "by": &joined.user_id });
-        for room in joined.room_ids {
+        for room in &joined.room_ids {
             notify_user(&event, &whom, switchboard.publishers_occupying(&room));
         }
         switchboard.establish_block(joined.user_id.clone(), whom);
@@ -550,7 +550,7 @@ fn process_unblock(from: &Arc<Session>, whom: UserId) -> MessageResult {
             send_fir(&[publisher]);
         }
         let event = json!({ "event": "unblocked", "by": &joined.user_id });
-        for room in joined.room_ids {
+        for room in &joined.room_ids {
             notify_user(&event, &whom, switchboard.publishers_occupying(&room));
         }
         Ok(MessageResponse::msg(json!({})))
@@ -586,9 +586,9 @@ fn process_data(from: &Arc<Session>, whom: Option<UserId>, body: &str) -> Messag
     let payload = json!({ "event": "data", "body": body });
     let switchboard = SWITCHBOARD.write()?;
     if let Some(joined) = from.join_state.get() {
-        for room in joined.room_ids {
+        for room in &joined.room_ids {
             let occupants = switchboard.publishers_occupying(&room);
-            if let Some(user_id) = whom {
+            if let Some(user_id) = &whom {
                 send_data_user(&payload, &user_id, occupants);
             } else {
                 send_data_except(&payload, &joined.user_id, occupants);
