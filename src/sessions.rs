@@ -27,8 +27,8 @@ pub struct JoinState {
 }
 
 impl JoinState {
-    pub fn new(kind: JoinKind, room_id: RoomId, user_id: UserId) -> Self {
-        Self { kind, room_id, user_id }
+    pub fn new(kind: JoinKind, room_ids: Vec<RoomId>, user_id: UserId) -> Self {
+        Self { kind, room_ids, user_id }
     }
 }
 

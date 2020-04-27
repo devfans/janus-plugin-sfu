@@ -318,9 +318,11 @@ extern "C" fn destroy_session(handle: *mut PluginSession, error: *mut c_int) {
                 // if this user is entirely disconnected, notify their roommates.
                 // todo: is it better if this is instead when their publisher disconnects?
                 if !switchboard.is_connected(&joined.user_id) {
-                    let response = json!({ "event": "leave", "user_id": &joined.user_id, "room_id": &joined.room_id });
-                    let occupants = switchboard.publishers_occupying(&joined.room_id);
-                    notify_except(&response, &joined.user_id, occupants);
+                    for room in joined.room_ids {
+                        let response = json!({ "event": "leave", "user_id": &joined.user_id, "room_id": &room });
+                        let occupants = switchboard.publishers_occupying(&room);
+                        notify_except(&response, &joined.user_id, occupants);
+                    }
                 }
             }
             sess.destroyed.store(true, Ordering::Relaxed);
@@ -460,13 +462,13 @@ fn process_join(from: &Arc<Session>, room_id: RoomId, user_id: UserId, subscribe
     }
 
     if join_kind == JoinKind::Publisher {
+        switchboard.join_publisher(Arc::clone(from), user_id.clone(), all_rooms.clone());
         for room in all_rooms { 
             let notification = json!({ "event": "join", "user_id": user_id, "room_id": room });
-            switchboard.join_publisher(Arc::clone(from), user_id.clone(), room.clone());
             notify_except(&notification, &user_id, switchboard.publishers_occupying(&room));
         }
     } else {
-        switchboard.join_subscriber(Arc::clone(from), user_id.clone(), room_id.clone());
+        switchboard.join_subscriber(Arc::clone(from), user_id.clone(), main_room.clone());
     }
 
     if let Some(subscription) = subscribe {
@@ -529,7 +531,9 @@ fn process_block(from: &Arc<Session>, whom: UserId) -> MessageResult {
     if let Some(joined) = from.join_state.get() {
         let mut switchboard = SWITCHBOARD.write()?;
         let event = json!({ "event": "blocked", "by": &joined.user_id });
-        notify_user(&event, &whom, switchboard.publishers_occupying(&joined.room_id));
+        for room in joined.room_ids {
+            notify_user(&event, &whom, switchboard.publishers_occupying(&room));
+        }
         switchboard.establish_block(joined.user_id.clone(), whom);
         Ok(MessageResponse::msg(json!({})))
     } else {
@@ -546,7 +550,9 @@ fn process_unblock(from: &Arc<Session>, whom: UserId) -> MessageResult {
             send_fir(&[publisher]);
         }
         let event = json!({ "event": "unblocked", "by": &joined.user_id });
-        notify_user(&event, &whom, switchboard.publishers_occupying(&joined.room_id));
+        for room in joined.room_ids {
+            notify_user(&event, &whom, switchboard.publishers_occupying(&room));
+        }
         Ok(MessageResponse::msg(json!({})))
     } else {
         Err(From::from("Cannot unblock when not in a room."))
@@ -580,11 +586,13 @@ fn process_data(from: &Arc<Session>, whom: Option<UserId>, body: &str) -> Messag
     let payload = json!({ "event": "data", "body": body });
     let switchboard = SWITCHBOARD.write()?;
     if let Some(joined) = from.join_state.get() {
-        let occupants = switchboard.publishers_occupying(&joined.room_id);
-        if let Some(user_id) = whom {
-            send_data_user(&payload, &user_id, occupants);
-        } else {
-            send_data_except(&payload, &joined.user_id, occupants);
+        for room in joined.room_ids {
+            let occupants = switchboard.publishers_occupying(&room);
+            if let Some(user_id) = whom {
+                send_data_user(&payload, &user_id, occupants);
+            } else {
+                send_data_except(&payload, &joined.user_id, occupants);
+            }
         }
         Ok(MessageResponse::msg(json!({})))
     } else {

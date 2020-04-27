@@ -151,9 +151,11 @@ impl Switchboard {
         self.blockers_to_miscreants.disassociate(from, target);
     }
 
-    pub fn join_publisher(&mut self, session: Arc<Session>, user: UserId, room: UserId) {
+    pub fn join_publisher(&mut self, session: Arc<Session>, user: UserId, rooms: Vec<UserId>) {
         self.publishers_by_user.entry(user).or_insert(session.clone());
-        self.publishers_by_room.insert(room, session);
+        for room in rooms {
+            self.publishers_by_room.insert(room.clone(), session.clone());
+        }
     }
 
     pub fn join_subscriber(&mut self, session: Arc<Session>, user: UserId, _room: UserId) {
@@ -164,8 +166,10 @@ impl Switchboard {
         self.publisher_to_subscribers.remove_key(session);
         if let Some(joined) = session.join_state.get() {
             self.publishers_by_user.remove(&joined.user_id);
-            if let Some(sessions) = self.publishers_by_room.get_vec_mut(&joined.room_id) {
-                sessions.retain(|x| x.handle != session.handle);
+            for room in joined.room_ids {
+                if let Some(sessions) = self.publishers_by_room.get_vec_mut(&room) {
+                    sessions.retain(|x| x.handle != session.handle);
+                }
             }
         }
     }
@@ -241,7 +245,7 @@ impl Switchboard {
             Some(joined) => (
                 self.blockers_to_miscreants.get_keys(&joined.user_id),
                 self.blockers_to_miscreants.get_values(&joined.user_id),
-                self.publishers_occupying(&joined.room_id),
+                self.publishers_occupying(&joined.room_ids[0]),
             ),
         };
         cohabitators.iter().filter(move |cohabitator| {
