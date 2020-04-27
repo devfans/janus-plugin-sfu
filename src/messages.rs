@@ -9,7 +9,8 @@ use std::error::Error;
 pub type RoomId = String;
 
 pub fn parse_all_rooms(room_id: RoomId) -> (RoomId, Vec<RoomId>) {
-  (room_id, vec!())
+  let rooms: Vec<String> = room_id.split("-").map(String::from).collect();
+  (rooms.first().unwrap().clone(), rooms)
 }
 
 /// A user ID representing a single Janus client. Used to correlate multiple Janus connections back to the same
