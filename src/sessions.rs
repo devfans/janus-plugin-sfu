@@ -10,15 +10,15 @@ use std::sync::{Arc, Mutex};
 #[derive(Debug, Clone)]
 pub struct JoinState {
     /// The room ID that this session is in.
-    pub room_id: RoomId,
+    pub room_ids: Vec<RoomId>,
 
     /// An opaque ID uniquely identifying this user.
     pub user_id: UserId,
 }
 
 impl JoinState {
-    pub fn new(room_id: RoomId, user_id: UserId) -> Self {
-        Self { room_id, user_id }
+    pub fn new(room_ids: Vec<RoomId>, user_id: UserId) -> Self {
+        Self { room_ids, user_id }
     }
 }
 

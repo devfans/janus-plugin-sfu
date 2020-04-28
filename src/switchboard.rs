@@ -160,7 +160,9 @@ impl Switchboard {
         self.publisher_to_subscribers.remove_value(session);
         self.sessions.retain(|s| s.handle != session.handle);
         if let Some(joined) = session.join_state.get() {
-            self.leave_room(session, joined.room_id.clone());
+            for room in &joined.room_ids {
+                self.leave_room(session, room.clone());
+            }
         }
     }
 
@@ -226,7 +228,7 @@ impl Switchboard {
             Some(joined) => (
                 self.blockers_to_miscreants.get_keys(&joined.user_id),
                 self.blockers_to_miscreants.get_values(&joined.user_id),
-                self.occupants_of(&joined.room_id),
+                self.occupants_of(&joined.room_ids.first().unwrap()),
             ),
         };
         cohabitators.iter().filter(move |cohabitator| {
@@ -274,7 +276,7 @@ impl Switchboard {
             .filter(|s| {
                 let join_state = s.join_state.get();
                 match join_state {
-                    Some(state) if &state.user_id == user_id && &state.room_id == room_id => true,
+                    Some(state) if &state.user_id == user_id && state.room_ids.contains(&room_id) => true,
                     _ => false,
                 }
             })
