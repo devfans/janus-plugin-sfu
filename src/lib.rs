@@ -416,7 +416,7 @@ fn process_join(from: &Arc<Session>, room_id: RoomId, user_id: UserId, subscribe
 
     let (main_room, all_rooms) = messages::parse_all_rooms(room_id.clone());
     let mut switchboard = SWITCHBOARD.write()?;
-    let body = json!({ "users": { main_room.as_str(): switchboard.get_users(&room_id) }});
+    let body = json!({ "users": { main_room.as_str(): switchboard.get_users(&main_room) }});
 
     let mut is_master_handle = false;
     if let Some(subscription) = subscribe.as_ref() {
